@@ -80,6 +80,7 @@ Workflow: [`.github/workflows/daily-drivers.yml`](.github/workflows/daily-driver
 
 | Trigger | Behavior |
 |---------|----------|
+| Push to `psycho` | Build all lines; release only if the mesa tip is new (or force via dispatch) |
 | Daily `06:00` UTC | Check each branch tip; build and release only if the commit is new |
 | `workflow_dispatch` | Manual; choose `line` (`all` or one line) and optional `force` |
 

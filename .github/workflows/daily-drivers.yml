@@ -1,6 +1,9 @@
 name: daily-drivers
 
 on:
+  push:
+    branches:
+      - psycho
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
