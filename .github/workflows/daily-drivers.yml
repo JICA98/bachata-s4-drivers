@@ -1,0 +1,125 @@
+name: daily-drivers
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      line:
+        description: "Line to build"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - gen8
+          - mojo-26.1
+          - mojo-25.0
+      force:
+        description: "Force rebuild even if SHA already released"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      lines: ${{ steps.set.outputs.lines }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.line }}" != "all" ]; then
+            echo 'lines=["${{ inputs.line }}"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'lines=["gen8","mojo-26.1","mojo-25.0"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        line: ${{ fromJson(needs.prepare.outputs.lines) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          sudo apt-get install -y \
+            git meson ninja-build python3-mako python3-setuptools \
+            glslang-tools flex bison pkg-config unzip file binutils \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            libz-dev:arm64 libexpat1-dev:arm64 \
+            libx11-dev:arm64 libxcb1-dev:arm64 libx11-xcb-dev:arm64 \
+            libxcb-dri3-dev:arm64 libxcb-present-dev:arm64 \
+            libxcb-xfixes0-dev:arm64 libxcb-randr0-dev:arm64 \
+            libxcb-shm0-dev:arm64 libxcb-sync-dev:arm64 \
+            libxshmfence-dev:arm64
+
+      - name: Build driver if needed
+        id: build
+        env:
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force && '1' || '0' }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/*.sh
+          set +e
+          out="$(./scripts/build-driver.sh "${{ matrix.line }}" 2> >(tee /tmp/build-err.txt >&2) | tee /tmp/build-out.txt | tail -n1)"
+          code=$?
+          set -e
+          if [[ "$code" -ne 0 ]]; then
+            echo "build failed with exit $code"
+            cat /tmp/build-err.txt || true
+            exit "$code"
+          fi
+          if [[ -n "$out" && -f "$out" && "$out" == *.zip ]]; then
+            echo "zip=$out" >> "$GITHUB_OUTPUT"
+            echo "built=true" >> "$GITHUB_OUTPUT"
+            echo "asset=$(basename "$out")" >> "$GITHUB_OUTPUT"
+          else
+            echo "built=false" >> "$GITHUB_OUTPUT"
+            echo "No new build for ${{ matrix.line }}"
+          fi
+
+      - name: Publish release
+        if: steps.build.outputs.built == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          zip="${{ steps.build.outputs.zip }}"
+          asset="${{ steps.build.outputs.asset }}"
+          line="${{ matrix.line }}"
+          rest="${asset#Turnip-}"
+          rest="${rest%-EMULATOR.zip}"
+          shortsha="${rest##*-}"
+          without_sha="${rest%-"$shortsha"}"
+          ver="${without_sha##*-v}"
+          tag="${line}-v${ver}"
+          commit="$(unzip -p "$zip" meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["sourceCommit"])')"
+          branch="$(unzip -p "$zip" meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["sourceBranch"])')"
+          title="Turnip ${line} v${ver} (${shortsha})"
+          body="$(cat <<EOF
+          ## Turnip ${line} v${ver}
+
+          - Branch: \`${branch}\`
+          - Commit: \`${commit}\`
+          - Asset: \`${asset}\`
+          - ABI: \`linux-aarch64-glibc\`
+
+          Built automatically for BachataS4 host-glibc runtime.
+          EOF
+          )"
+          gh release create "$tag" "$zip" \
+            --title "$title" \
+            --notes "$body"
