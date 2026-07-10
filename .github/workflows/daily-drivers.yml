@@ -115,7 +115,14 @@ jobs:
           set -e
           if [[ "$code" -ne 0 ]]; then
             echo "build failed with exit $code"
+            echo "---- build-out (tail) ----"
+            tail -n 120 /tmp/build-out.txt || true
+            echo "---- build-err ----"
             cat /tmp/build-err.txt || true
+            if [[ -f work/${{ matrix.line }}/build/meson-logs/meson-log.txt ]]; then
+              echo "---- meson-log (tail) ----"
+              tail -n 120 "work/${{ matrix.line }}/build/meson-logs/meson-log.txt" || true
+            fi
             exit "$code"
           fi
           if [[ -n "$out" && -f "$out" && "$out" == *.zip ]]; then

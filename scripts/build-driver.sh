@@ -98,15 +98,31 @@ log "version=v$version"
 rm -rf "$build" "$prefix"
 mkdir -p "$prefix"
 
+dump_meson_log() {
+  local logf="$build/meson-logs/meson-log.txt"
+  if [[ -f "$logf" ]]; then
+    log "---- meson-log.txt (tail) ----"
+    tail -n 80 "$logf" >&2 || true
+    log "---- end meson-log ----"
+  fi
+}
+
 run_meson() {
   # shellcheck disable=SC2068
-  meson setup "$build" "$src" \
+  if ! meson setup "$build" "$src" \
     --cross-file "$cross" \
     --prefix "$prefix" \
     --libdir lib \
     --buildtype release \
-    "$@"
+    "$@"; then
+    dump_meson_log
+    return 1
+  fi
 }
+
+# Do not put static-link flags in the cross-file: they break meson feature tests.
+# Apply them after a successful setup, before ninja.
+xcb_static_link_args="-L/usr/lib/aarch64-linux-gnu -Wl,-Bstatic -lxcb-xfixes -Wl,-Bdynamic"
 
 if ! run_meson \
   -Dplatforms=x11 \
@@ -130,8 +146,14 @@ if ! run_meson \
     -Dfreedreno-kmds=kgsl \
     -Degl=disabled \
     -Dllvm=disabled \
-    -Dbuild-tests=false
+    -Dbuild-tests=false \
+    || die "meson setup failed for line $line"
 fi
+
+# Static-link libxcb-xfixes (missing from Bachata host rootfs) into the driver only.
+meson configure "$build" \
+  -Dc_link_args="$xcb_static_link_args" \
+  -Dcpp_link_args="$xcb_static_link_args"
 
 ninja -C "$build" install
 
