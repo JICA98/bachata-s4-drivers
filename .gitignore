@@ -1,0 +1,10 @@
+/dist/
+/work/
+*.so
+*.zip
+*.o
+*.a
+.cache/
+__pycache__/
+*.pyc
+.meson*
