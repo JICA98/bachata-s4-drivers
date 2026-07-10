@@ -1,23 +1,17 @@
 name: daily-drivers
 
 on:
-  push:
-    branches:
-      - psycho
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
-      line:
-        description: "Line to build"
-        required: true
+      branch:
+        description: >-
+          Mesa branch or line id to build (e.g. turnip/gen8, mojo/26.1, gen8).
+          Leave empty or set to "all" to build every tracked line.
+        required: false
         default: all
-        type: choice
-        options:
-          - all
-          - gen8
-          - mojo-26.1
-          - mojo-25.0
+        type: string
       force:
         description: "Force rebuild even if SHA already released"
         required: false
@@ -33,13 +27,38 @@ jobs:
     outputs:
       lines: ${{ steps.set.outputs.lines }}
     steps:
+      - uses: actions/checkout@v4
+
       - id: set
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.line }}" != "all" ]; then
-            echo 'lines=["${{ inputs.line }}"]' >> "$GITHUB_OUTPUT"
-          else
+          set -euo pipefail
+          request="${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'all' }}"
+          # trim whitespace
+          request="$(printf '%s' "$request" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [[ -z "$request" || "$request" == "all" ]]; then
             echo 'lines=["gen8","mojo-26.1","mojo-25.0"]' >> "$GITHUB_OUTPUT"
+            echo "Building all lines"
+            exit 0
           fi
+
+          # Accept line id (gen8) or git branch (turnip/gen8) from lines.conf
+          line_id=""
+          while IFS='=' read -r id branch; do
+            [[ -z "$id" || "$id" == \#* ]] && continue
+            if [[ "$request" == "$id" || "$request" == "$branch" ]]; then
+              line_id="$id"
+              break
+            fi
+          done < lines.conf
+
+          if [[ -z "$line_id" ]]; then
+            echo "Unknown branch/line: '$request'"
+            echo "Valid line ids and branches from lines.conf:"
+            cat lines.conf
+            exit 1
+          fi
+          echo "lines=[\"${line_id}\"]" >> "$GITHUB_OUTPUT"
+          echo "Building single line: $line_id (request=$request)"
 
   build:
     needs: prepare

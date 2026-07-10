@@ -80,9 +80,15 @@ Workflow: [`.github/workflows/daily-drivers.yml`](.github/workflows/daily-driver
 
 | Trigger | Behavior |
 |---------|----------|
-| Push to `psycho` | Build all lines; release only if the mesa tip is new (or force via dispatch) |
-| Daily `06:00` UTC | Check each branch tip; build and release only if the commit is new |
-| `workflow_dispatch` | Manual; choose `line` (`all` or one line) and optional `force` |
+| Daily `06:00` UTC | Build all tracked lines; release only if the mesa tip is new |
+| `workflow_dispatch` | Manual. Input `branch`: empty/`all` = every line, or a line id / mesa branch (`gen8`, `turnip/gen8`, `mojo/26.1`, …). Optional `force`. |
+
+```bash
+# Manual examples
+gh workflow run daily-drivers.yml -f branch=all
+gh workflow run daily-drivers.yml -f branch=turnip/gen8
+gh workflow run daily-drivers.yml -f branch=mojo-26.1 -f force=true
+```
 
 CI uses the same scripts as local builds, then creates a GitHub Release with the `-EMULATOR.zip` asset. No driver binaries are committed to the repository.
 
