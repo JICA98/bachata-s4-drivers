@@ -53,7 +53,21 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -euo pipefail
+          # Multiarch: keep default Ubuntu mirrors amd64-only; arm64 from ports.
           sudo dpkg --add-architecture arm64
+          if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
+            sudo sed -i '/^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          fi
+          if [[ -f /etc/apt/sources.list ]]; then
+            sudo sed -i -E 's/^deb (http|https)/deb [arch=amd64] \1/' /etc/apt/sources.list || true
+          fi
+          codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          {
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename} main restricted universe multiverse"
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-updates main restricted universe multiverse"
+            echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${codename}-security main restricted universe multiverse"
+          } | sudo tee /etc/apt/sources.list.d/ubuntu-ports.list >/dev/null
           sudo apt-get update
           sudo apt-get install -y \
             git meson ninja-build python3-mako python3-setuptools \
