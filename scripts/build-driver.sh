@@ -138,6 +138,30 @@ ninja -C "$build" install
 lib="$(find "$prefix" -name 'libvulkan_freedreno.so' -type f | head -n1)"
 [[ -n "$lib" && -f "$lib" ]] || die "libvulkan_freedreno.so not found under $prefix"
 
+# Strip for smaller packages / match production drivers.
+if command -v aarch64-linux-gnu-strip >/dev/null 2>&1; then
+  aarch64-linux-gnu-strip --strip-unneeded "$lib" || true
+fi
+
+# Fail closed if we still depend on libs Bachata host does not ship.
+dyn_needed="$(readelf -d "$lib" | awk '/NEEDED/ {print $5}' | tr -d '[]')"
+while IFS= read -r needed; do
+  [[ -n "$needed" ]] || continue
+  case "$needed" in
+    libz.so.1|libxcb.so.1|libX11-xcb.so.1|libxcb-randr.so.0|libxcb-shm.so.0|\
+    libxcb-dri3.so.0|libxcb-present.so.0|libxcb-render.so.0|libxcb-sync.so.1|\
+    libX11.so.6|libstdc++.so.6|libm.so.6|libgcc_s.so.1|libc.so.6|ld-linux-aarch64.so.1|\
+    libdrm.so.2|libpthread.so.0|libdl.so.2)
+      ;;
+    libxcb-xfixes.so.0|libexpat.so.1)
+      die "driver still dynamically needs $needed (not in Bachata host rootfs); static-link it"
+      ;;
+    *)
+      log "warning: unexpected NEEDED $needed (verify Bachata host ships it)"
+      ;;
+  esac
+done <<<"$dyn_needed"
+
 driver_version="Vulkan 1.4.0"
 icd_src="$(find "$prefix" -name '*freedreno*.json' -type f | head -n1 || true)"
 if [[ -n "${icd_src:-}" ]]; then
