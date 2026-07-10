@@ -32,3 +32,22 @@ line_branch() {
 }
 
 MESA_REPO_URL="${MESA_REPO_URL:-https://github.com/whitebelyash/mesa-unified}"
+
+# Create a flat zip from named files in a directory (no system zip required).
+# Usage: make_zip <outdir_or_stage> <out.zip> file1 [file2 ...]
+make_zip() {
+  local stage="$1"
+  local out="$2"
+  shift 2
+  PKG_STAGE="$stage" PKG_OUT="$out" PKG_NAMES="$*" python3 <<'PY'
+import os
+import zipfile
+
+stage = os.environ["PKG_STAGE"]
+out = os.environ["PKG_OUT"]
+names = os.environ["PKG_NAMES"].split()
+with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+    for name in names:
+        zf.write(os.path.join(stage, name), arcname=name)
+PY
+}
