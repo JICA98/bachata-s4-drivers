@@ -31,6 +31,14 @@ commit="$(git -C "$src" rev-parse HEAD)"
 short="${commit:0:7}"
 log "commit=$commit"
 
+"$root/scripts/apply-mesa-patches.sh" "$src"
+kgsl="$src/src/freedreno/vulkan/tu_knl_kgsl.cc"
+[[ -f "$kgsl" ]] || die "tu_knl_kgsl.cc not found in mesa tree"
+"$root/scripts/check-kgsl-zero-timeout.sh" "$kgsl"
+patches_id="$(mesa_patches_id)"
+patch_names="$(mesa_patch_names)"
+log "patches_id=$patches_id patches=$patch_names"
+
 # Older mesa (e.g. mojo/25.0) conflicts with glibc C11 once_flag/call_once.
 # Mirror the guards present on newer mesa branches.
 threads_h="$src/src/c11/threads.h"
@@ -84,7 +92,7 @@ if [[ -n "${FORCE_VERSION:-}" ]]; then
   version="$FORCE_VERSION"
 else
   set +e
-  version="$(FORCE="${FORCE:-0}" "$root/scripts/next-version.sh" --line "$line" --sha "$commit")"
+  version="$(FORCE="${FORCE:-0}" "$root/scripts/next-version.sh" --line "$line" --sha "$commit" --patches-id "$patches_id")"
   code=$?
   set -e
   if [[ "$code" -eq 2 ]]; then
@@ -198,6 +206,8 @@ zip_path="$("$root/scripts/package-driver.sh" \
   --branch "$branch" \
   --library "$lib" \
   --driver-version "$driver_version" \
+  --patches "$patch_names" \
+  --patches-id "$patches_id" \
   --outdir "$dist")"
 
 if [[ "${SKIP_VALIDATE:-0}" != "1" ]]; then

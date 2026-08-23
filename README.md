@@ -35,7 +35,13 @@ Examples:
 
 Git tags: `<line>-v<N>` (for example `gen8-v3`).
 
-Per-line counters (`v1`, `v2`, …) increase only when that line publishes a new package. The short SHA is the mesa-unified commit.
+Per-line counters (`v1`, `v2`, …) increase only when that line publishes a new package. The short SHA is the mesa-unified commit. A change in `patches/` also publishes a new `vN` for the same mesa SHA (`meta.json` records `patches` and `patchesId`).
+
+## Mesa patches
+
+`patches/*.patch` are applied to every line after clone, before meson. Current set:
+
+- `kgsl-zero-timeout-poll` — Vulkan `timeout=0` reads `KGSL_TIMESTAMP_RETIRED` instead of blocking on `IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID`. Same hunk applies to `gen8`, `mojo-26.1`, and `mojo-25.0`.
 
 ## Local build
 
@@ -96,10 +102,12 @@ CI uses the same scripts as local builds, then creates a GitHub Release with the
 
 | Script | Role |
 |--------|------|
-| `scripts/build-driver.sh` | Clone tip, cross-build, package, validate |
+| `scripts/build-driver.sh` | Clone tip, apply patches, cross-build, package, validate |
+| `scripts/apply-mesa-patches.sh` | Apply `patches/*.patch` onto a mesa tree |
+| `scripts/check-kgsl-zero-timeout.sh` | Require zero-timeout poll in `wait_timestamp_safe` |
 | `scripts/package-driver.sh` | Write meta/ICD/zip |
 | `scripts/validate-driver.sh` | Layout / ABI / ELF / glibc checks |
-| `scripts/next-version.sh` | Next `vN` + already-released detection |
+| `scripts/next-version.sh` | Next `vN` + already-released detection (SHA + patches-id) |
 | `scripts/check-tip.sh` | Resolve remote tip SHA |
 
 ## License

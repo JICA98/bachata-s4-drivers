@@ -33,6 +33,46 @@ line_branch() {
 
 MESA_REPO_URL="${MESA_REPO_URL:-https://github.com/whitebelyash/mesa-unified}"
 
+# SHA-256 prefix of patches/*.patch (filenames + bytes). Prints "none" if empty.
+mesa_patches_id() {
+  local root patches
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  patches="$root/patches"
+  PATCHES_DIR="$patches" python3 <<'PY'
+import hashlib
+import os
+from pathlib import Path
+
+d = Path(os.environ["PATCHES_DIR"])
+files = sorted(d.glob("*.patch")) if d.is_dir() else []
+if not files:
+    print("none")
+else:
+    h = hashlib.sha256()
+    for p in files:
+        h.update(p.name.encode("utf-8"))
+        h.update(b"\0")
+        h.update(p.read_bytes())
+        h.update(b"\0")
+    print(h.hexdigest()[:7])
+PY
+}
+
+# Comma-separated patch stems (no .patch), sorted. Empty if none.
+mesa_patch_names() {
+  local root patches
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  patches="$root/patches"
+  PATCHES_DIR="$patches" python3 <<'PY'
+import os
+from pathlib import Path
+
+d = Path(os.environ["PATCHES_DIR"])
+files = sorted(d.glob("*.patch")) if d.is_dir() else []
+print(",".join(p.stem for p in files))
+PY
+}
+
 # Create a flat zip from named files in a directory (no system zip required).
 # Usage: make_zip <outdir_or_stage> <out.zip> file1 [file2 ...]
 make_zip() {

@@ -10,6 +10,8 @@ branch=""
 library=""
 driver_version="Vulkan 1.4.0"
 outdir=""
+patches=""
+patches_id="none"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,6 +22,8 @@ while [[ $# -gt 0 ]]; do
     --library) library="$2"; shift 2 ;;
     --driver-version) driver_version="$2"; shift 2 ;;
     --outdir) outdir="$2"; shift 2 ;;
+    --patches) patches="$2"; shift 2 ;;
+    --patches-id) patches_id="$2"; shift 2 ;;
     *) die "unknown arg: $1" ;;
   esac
 done
@@ -56,12 +60,16 @@ export PKG_VERSION="$version"
 export PKG_BRANCH="$branch"
 export PKG_COMMIT="$commit"
 export PKG_DRIVER_VERSION="$driver_version"
+export PKG_PATCHES="$patches"
+export PKG_PATCHES_ID="$patches_id"
 export PKG_META_PATH="$stage/meta.json"
 
 python3 <<'PY'
 import json
 import os
 
+patches = [p for p in os.environ.get("PKG_PATCHES", "").split(",") if p]
+patches_id = os.environ.get("PKG_PATCHES_ID") or "none"
 meta = {
     "schemaVersion": 1,
     "name": f"Turnip {os.environ['PKG_LINE']} v{os.environ['PKG_VERSION']}",
@@ -81,6 +89,8 @@ meta = {
     "sourceCommit": os.environ["PKG_COMMIT"],
     "line": os.environ["PKG_LINE"],
     "releaseVersion": int(os.environ["PKG_VERSION"]),
+    "patches": patches,
+    "patchesId": patches_id,
 }
 with open(os.environ["PKG_META_PATH"], "w", encoding="utf-8") as fh:
     json.dump(meta, fh, indent=2)

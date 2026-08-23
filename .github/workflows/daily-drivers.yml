@@ -154,6 +154,8 @@ jobs:
           tag="${line}-v${ver}"
           commit="$(unzip -p "$zip" meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["sourceCommit"])')"
           branch="$(unzip -p "$zip" meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["sourceBranch"])')"
+          patches_id="$(unzip -p "$zip" meta.json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("patchesId") or "none")')"
+          patches="$(unzip -p "$zip" meta.json | python3 -c 'import json,sys; print(",".join(json.load(sys.stdin).get("patches") or []))')"
           title="Turnip ${line} v${ver} (${shortsha})"
           body="$(cat <<EOF
           ## Turnip ${line} v${ver}
@@ -162,6 +164,8 @@ jobs:
           - Commit: \`${commit}\`
           - Asset: \`${asset}\`
           - ABI: \`linux-aarch64-glibc\`
+          - Patches-Id: \`${patches_id}\`
+          - Patches: \`${patches}\`
 
           Built automatically for BachataS4 host-glibc runtime.
           EOF
