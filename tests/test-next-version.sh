@@ -69,4 +69,51 @@ code=$?
 set -e
 [[ "$code" == "2" ]] || { echo "expected exit 2 for same sha+patches-id, got $code"; exit 1; }
 
+# Older unpatched zip for the same mesa SHA must not hide a later matching patches-id.
+# GitHub lists newest-first; NOTES_FILE may be oldest-first. Skip if ANY row matches.
+export NOTES_FILE="$notes_dir/notes-mixed-oldest-first.txt"
+cat >"$NOTES_FILE" <<'EOF'
+gen8 09df2ee none
+gen8 09df2ee abc1234
+EOF
+set +e
+FORCE=0 "$nv" --line gen8 --sha 09df2ee2ba97f76d4da244bc98e843f807bfa99f --patches-id abc1234
+code=$?
+set -e
+[[ "$code" == "2" ]] || { echo "expected exit 2 when any same-SHA release has this patches-id (oldest-first notes), got $code"; exit 1; }
+
+export NOTES_FILE="$notes_dir/notes-mixed-newest-first.txt"
+cat >"$NOTES_FILE" <<'EOF'
+gen8 09df2ee abc1234
+gen8 09df2ee none
+EOF
+set +e
+FORCE=0 "$nv" --line gen8 --sha 09df2ee2ba97f76d4da244bc98e843f807bfa99f --patches-id abc1234
+code=$?
+set -e
+[[ "$code" == "2" ]] || { echo "expected exit 2 when any same-SHA release has this patches-id (newest-first notes), got $code"; exit 1; }
+
+# GitHub releases JSON (newest-first): oldest unpatched + newer patched for the same SHA.
+unset NOTES_FILE
+export RELEASES_JSON_FILE="$notes_dir/releases-newest-first.json"
+cat >"$RELEASES_JSON_FILE" <<'EOF'
+[
+  {
+    "tag_name": "gen8-v4",
+    "body": "## Turnip gen8 v4\n\n- Patches-Id: `abc1234`\n",
+    "assets": [{"name": "Turnip-gen8-v4-09df2ee-EMULATOR.zip"}]
+  },
+  {
+    "tag_name": "gen8-v3",
+    "body": "## Turnip gen8 v3\n\nBuilt automatically.\n",
+    "assets": [{"name": "Turnip-gen8-v3-09df2ee-EMULATOR.zip"}]
+  }
+]
+EOF
+set +e
+FORCE=0 "$nv" --line gen8 --sha 09df2ee2ba97f76d4da244bc98e843f807bfa99f --patches-id abc1234
+code=$?
+set -e
+[[ "$code" == "2" ]] || { echo "expected exit 2 from GitHub JSON newest-first (patched v4 + unpatched v3), got $code"; exit 1; }
+
 echo "next-version tests ok"

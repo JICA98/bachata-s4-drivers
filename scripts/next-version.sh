@@ -51,6 +51,36 @@ list_assets() {
   true
 }
 
+# Print every patches-id recorded for this line+short SHA (one per line).
+# Skip a rebuild when ANY of those ids equals the current patches-id. GitHub
+# lists releases newest-first and older unpatched zips for the same mesa SHA
+# still exist; do not use only the last array element.
+emit_release_patches_ids() {
+  LINE="$1" SHORT="$2" python3 -c '
+import json, os, re, sys
+
+line = os.environ["LINE"]
+short = os.environ["SHORT"]
+data = json.load(sys.stdin)
+pat = re.compile(
+    r"^Turnip-"
+    + re.escape(line)
+    + r"-v[0-9]+-"
+    + re.escape(short)
+    + r"-EMULATOR\.zip$"
+)
+ids = []
+for rel in data:
+    names = [a.get("name") or "" for a in (rel.get("assets") or [])]
+    if not any(pat.match(name) for name in names):
+        continue
+    body = rel.get("body") or ""
+    match = re.search(r"Patches-Id: `([^`]+)`", body)
+    ids.append(match.group(1) if match else "none")
+print("\n".join(ids) if ids else "none")
+'
+}
+
 recorded_patches_id() {
   local want_line="$1" want_short="$2"
   if [[ -n "${NOTES_FILE:-}" ]]; then
@@ -60,30 +90,20 @@ recorded_patches_id() {
     ' "$NOTES_FILE"
     return 0
   fi
+  if [[ -n "${RELEASES_JSON_FILE:-}" ]]; then
+    emit_release_patches_ids "$want_line" "$want_short" <"$RELEASES_JSON_FILE"
+    return 0
+  fi
   # Fixture-driven tests set ASSETS_FILE; do not hit the network.
   if [[ -n "${ASSETS_FILE:-}" ]]; then
     echo none
     return 0
   fi
   if command -v gh >/dev/null 2>&1; then
-    gh api "repos/${repo}/releases?per_page=100" --jq \
-      --arg line "$want_line" --arg short "$want_short" -r '
-      def pid:
-        (.body // "")
-        | if test("Patches-Id: `[^`]+`") then
-            capture("Patches-Id: `(?<id>[^`]+)`").id
-          else "none" end;
-      [
-        .[]
-        | select(
-            (.assets[]?.name // "")
-            | test("^Turnip-" + ($line | gsub("\\.";"\\."))
-                   + "-v[0-9]+-" + $short + "-EMULATOR\\.zip$")
-          )
-        | pid
-      ]
-      | if length == 0 then "none" else .[-1] end
-    ' 2>/dev/null || echo none
+    # gh api --jq does not accept --arg; pipe JSON into python instead.
+    gh api "repos/${repo}/releases?per_page=100" 2>/dev/null \
+      | emit_release_patches_ids "$want_line" "$want_short" \
+      || echo none
     return 0
   fi
   echo none
@@ -92,7 +112,7 @@ recorded_patches_id() {
 if [[ -n "$short" && "${FORCE:-0}" != "1" ]]; then
   if list_assets | grep -E "^Turnip-${line//./\\.}-v[0-9]+-${short}-EMULATOR\\.zip$" >/dev/null; then
     recorded="$(recorded_patches_id "$line" "$short")"
-    if [[ "$recorded" == "$patches_id" ]]; then
+    if printf '%s\n' "$recorded" | grep -Fxq -- "$patches_id"; then
       echo "already_released" >&2
       exit 2
     fi
