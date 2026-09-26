@@ -23,7 +23,7 @@ mesa="$tmpdir/mesa"
 mkdir -p "$mesa/src/freedreno/vulkan"
 cp "$fixture" "$mesa/src/freedreno/vulkan/tu_knl_kgsl.cc"
 
-"$apply" "$mesa"
+"$apply" "$mesa" gen8
 "$check" "$mesa/src/freedreno/vulkan/tu_knl_kgsl.cc"
 
 patched="$mesa/src/freedreno/vulkan/tu_knl_kgsl.cc"
@@ -36,7 +36,7 @@ bad="$tmpdir/bad-mesa"
 mkdir -p "$bad/src/freedreno/vulkan"
 printf '// no wait_timestamp_safe\n' >"$bad/src/freedreno/vulkan/tu_knl_kgsl.cc"
 set +e
-"$apply" "$bad" >/dev/null 2>&1
+"$apply" "$bad" gen8 >/dev/null 2>&1
 bad_code=$?
 set -e
 [[ "$bad_code" -ne 0 ]] || { echo "apply must fail closed when hunk does not match"; exit 1; }

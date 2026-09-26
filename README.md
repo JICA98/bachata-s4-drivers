@@ -42,6 +42,7 @@ Per-line counters (`v1`, `v2`, …) increase only when that line publishes a new
 `patches/*.patch` are applied to every line after clone, before meson. Current set:
 
 - `kgsl-zero-timeout-poll` — Vulkan `timeout=0` reads `KGSL_TIMESTAMP_RETIRED` instead of blocking on `IOCTL_KGSL_DEVICE_WAITTIMESTAMP_CTXTID`. Same hunk applies to `gen8`, `mojo-26.1`, and `mojo-25.0`.
+- `kgsl-wait-any-correctness` — wait-any selects the oldest same-queue timestamp, skips timestamp-fence creation for FD-only waits, treats a ready `poll()` as success and a timed-out `poll()` as `VK_TIMEOUT`. Applies only to the Gen8 GLIBC line.
 
 ## Local build
 
@@ -51,7 +52,7 @@ Per-line counters (`v1`, `v2`, …) increase only when that line publishes a new
 sudo dpkg --add-architecture arm64
 sudo apt-get update
 sudo apt-get install -y \
-  git meson ninja-build python3-mako python3-setuptools \
+  git meson ninja-build python3-mako python3-setuptools python3-yaml \
   glslang-tools flex bison pkg-config unzip file binutils \
   gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
   libz-dev:arm64 libexpat1-dev:arm64 \

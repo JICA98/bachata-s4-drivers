@@ -31,12 +31,15 @@ commit="$(git -C "$src" rev-parse HEAD)"
 short="${commit:0:7}"
 log "commit=$commit"
 
-"$root/scripts/apply-mesa-patches.sh" "$src"
+"$root/scripts/apply-mesa-patches.sh" "$src" "$line"
 kgsl="$src/src/freedreno/vulkan/tu_knl_kgsl.cc"
 [[ -f "$kgsl" ]] || die "tu_knl_kgsl.cc not found in mesa tree"
 "$root/scripts/check-kgsl-zero-timeout.sh" "$kgsl"
-patches_id="$(mesa_patches_id)"
-patch_names="$(mesa_patch_names)"
+if [[ "$line" == gen8 ]]; then
+  "$root/scripts/check-kgsl-wait-any.sh" "$kgsl"
+fi
+patches_id="$(mesa_patches_id "$line")"
+patch_names="$(mesa_patch_names "$line")"
 log "patches_id=$patches_id patches=$patch_names"
 
 # Older mesa (e.g. mojo/25.0) conflicts with glibc C11 once_flag/call_once.

@@ -6,6 +6,38 @@ timestamp_cmp(uint32_t a, uint32_t b)
    return (int32_t) (a - b) >= 0;
 }
 
+/* Mesa wait-any poll result mapping. A ready poll returns >0; timeout returns 0. */
+static VkResult
+kgsl_syncobj_wait_any(struct tu_device* device, struct kgsl_syncobj **syncobjs, uint32_t count, uint64_t abs_timeout_ns)
+{
+   uint32_t lowest_timestamp = 0;
+   bool first_ts = true;
+   kgsl_syncobj_foreach_state(syncobjs, KGSL_SYNCOBJ_STATE_TS) {
+         if (first_ts || timestamp_cmp(sync->timestamp, lowest_timestamp)) {
+         first_ts = false;
+         lowest_timestamp = sync->timestamp;
+      }
+   }
+
+      if (num_fds) {
+         struct pollfd *poll_fd = (struct pollfd *) u_vector_add(&poll_fds);
+         poll_fd->fd = timestamp_to_fd(queue, lowest_timestamp);
+         poll_fd->events = POLLIN;
+      }
+
+   int ret = poll(nullptr, 0, get_relative_ms(abs_timeout_ns));
+   VkResult result = VK_TIMEOUT;
+      if (ret != 0) {
+         assert(errno == ETIME);
+         result = VK_TIMEOUT;
+      } else {
+         result = VK_SUCCESS;
+      }
+
+   u_vector_finish(&poll_fds);
+   return result;
+}
+
 static int
 get_relative_ms(uint64_t abs_timeout_ns)
 {

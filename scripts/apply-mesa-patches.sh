@@ -4,7 +4,9 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
 src="${1:-}"
-[[ -n "$src" && -d "$src" ]] || die "usage: apply-mesa-patches.sh <mesa-src>"
+line="${2:-}"
+[[ -n "$src" && -d "$src" && -n "$line" ]] || die "usage: apply-mesa-patches.sh <mesa-src> <line_id>"
+line_branch "$line" >/dev/null
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 patches="$root/patches"
@@ -19,6 +21,9 @@ require_cmd patch
 src="$(cd "$src" && pwd)"
 mapfile -t files < <(printf '%s\n' "${files[@]}" | sort)
 for p in "${files[@]}"; do
+  if [[ "$line" != gen8 && "$(basename "$p")" == kgsl-wait-any-correctness.patch ]]; then
+    continue
+  fi
   log "applying $(basename "$p")"
   if ! patch -d "$src" -p1 --batch --fuzz=0 <"$p"; then
     die "failed to apply $(basename "$p") onto $src"
